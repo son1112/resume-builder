@@ -1,0 +1,604 @@
+Model after [[~/IBT/jewelry/rails/CaseJewelryRails/README.org]], in particular, 
+for pdf(Prawn) design and generation as a stylized presentation of data.
+
+PURPOSE: Resume building guide that produces a pdf designed by custom prawn 
+templates
+
+* RESUME (Scheme)
+  
+  [[Resume Model]]
+  
+  : rails g model Resume name:string
+
+** General
+
+   - [ ] Resume name
+
+     : name:string
+
+** Experience 
+
+   [[Experience Model]]
+
+   "Add an experience"
+
+   : rails g model Experience title:string begin_date:date end_date:date achievements:text
+
+   - [ ] Title
+   - [ ] Beginning Date
+   - [ ] Ending Date
+   - [ ] Achievements
+     - comma separated 
+       - to hash/array?
+
+*** NB
+
+    with regards Date, Time, Datetime
+
+    http://stackoverflow.com/questions/5941613/are-the-date-time-and-datetime-classes-necessary
+
+    PROJECT FIRST APPROACH: /date/
+
+** SKILLS
+
+   "Add a skill"
+
+   : rails g migration AddSkillsToResume skills:text
+
+   - [ ] skill:text
+     - comma separated values
+
+** Education
+
+   [[Program Model]]
+
+   "Add a program"
+
+   : rails g model Program school:string course:string
+
+   - [ ] School Name
+   - [ ] Course/s
+
+* RESUME (Features)
+* Config
+
+** Gems
+
+   [[./Gemfile]]
+
+   #+NAME: Gemfile
+   #+begin_src ruby :tangle Gemfile :padline no
+     source 'https://rubygems.org'
+
+     gem 'rails', '4.2.6'
+     gem 'pg', '~> 0.15'
+     gem 'sass-rails', '~> 5.0'
+     gem 'uglifier', '>= 1.3.0'
+     gem 'coffee-rails', '~> 4.1.0'
+     gem 'jquery-rails'
+     gem 'turbolinks'
+     gem 'jbuilder', '~> 2.0'
+     gem 'sdoc', '~> 0.4.0', group: :doc
+     gem 'prawn'
+
+     group :development, :test do
+       gem 'byebug'
+     end
+
+     group :development do
+       gem 'web-console', '~> 2.0'
+
+       gem 'spring'
+     end
+   #+end_src
+
+** Routes
+
+   [[./config/routes.rb]]
+
+   #+NAME: routes.rb
+   #+begin_src ruby :tangle config/routes.rb :padline no
+     Rails.application.routes.draw do
+       #resources :labelsheets, :except => [:show]
+       #resources :labelsheets, :only => [:show], :defaults => { :format => 'pdf' }
+
+       resources: resumes 
+       resources: experiences
+       resources: programs
+       
+       get "/" => "resumes#show"
+       
+       #get "labelsheets" => "labelsheets#new"
+       #get "labelsheets/:id", to: "labelsheets#show", defaults: { format: 'pdf' }
+
+       #constraints format: 'pdf' do
+       #  resources :labelsheets, only: [:show]
+       #end
+       
+       #get 'dashboard/show'
+
+
+
+       #get "/dashboard" => "dashboard#show"
+
+       #get "/callback" => "auth0#callback"
+       #get "/auth/auth0/callback" => "auth0#callback"
+       #get "/auth/failure" => "auth0#failure"
+
+     end
+   #+end_src
+
+* MVC 
+
+
+** Models
+
+*** Resume Model
+
+    : rails g model Resume name:string
+
+    [[./app/models/resume.rb]]
+
+    #+NAME: resume.rb
+    #+begin_src ruby :tangle app/models/resume.rb :padline no
+      class Resume < ActiveRecord::Base
+        #dragonfly_accessor :logo
+
+        has_many :experiences
+        has_many :programs
+        accepts_nested_attributes_for :experiences, :reject_if ==> :all_blank, :allow_destroy => true
+        
+      end
+    #+end_src
+
+*** Experience Model
+
+    : rails g model Experience title:string begin_date:date end_date:date achievements:text
+
+    [[./app/models/experience.rb]]
+
+    #+NAME: experience.rb
+    #+begin_src ruby :tangle app/models/experience.rb :padline no
+      class Experience < ActiveRecord::Base
+        belongs_to :resume
+      end
+    #+end_src
+
+*** Program Model :Education:
+    
+    : rails g model Program school:string course:string
+
+    [[./app/models/program.rb]]
+    
+    #+NAME: program.rb
+    #+begin_src ruby :tangle app/models/program.rb :padline no
+      class Program < ActiveRecord::Base
+        belongs_to :resume
+      end
+    #+end_src
+
+
+** Views
+
+*** Resumes Views
+
+    [[./app/views/resumes/]]
+
+    [[./app/views/resumes/index.html.erb]]
+
+    #+NAME: resumes index view
+    #+begin_src web :tangle app/views/resumes/index.html.erb :padline no
+      <p id="notice"><%= notice %></p>
+
+      <h1>Listing Resumes</h1>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Index</th>
+            <th colspan="3"></th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <% @resumes.each do |resume| %>
+            <tr>
+              <td><%= link_to 'Show', resume %></td>
+              <td><%= link_to 'Edit', edit_resume_path(resume) %></td>
+              <td><%= link_to 'Destroy', resume, method: :delete, data: { confirm: 'Are you sure?' } %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+
+      <br>
+
+      <%= link_to 'New Resume', new_resume_path %>
+    #+end_src
+
+    [[./app/views/resumes/show.html.erb]]
+
+    #+NAME: resumes show view
+    #+begin_src web :tangle app/views/resumes/show.html.erb :padline no
+      <p id="notice"><%= notice %></p>
+
+      <p>
+        <strong>Index:</strong>
+        <%= @resume.file_name if @resume.file_stored? %>
+        <%= link_to 'PDF', "#{@resume.id}.pdf" %>
+      </p>
+
+      <%= link_to 'Edit', edit_resume_path(@resume) %> |
+      <%= link_to 'Back', resumes_path %>
+    #+end_src
+
+    [[./app/views/resumes/new.html.erb]]
+
+    #+NAME: resumes new view
+    #+begin_src web :tangle app/views/resumes/new.html.erb :padline no
+      <%= render 'form' %>
+      <br/>
+
+      <%= link_to 'Resumes', resumes_path, class: 'pure-button pure-button-primary' %>
+    #+end_src
+
+    [[./app/views/resumes/_form.html.erb]]
+
+    #+NAME: resumes form helper view
+    #+begin_src web :tangle app/views/resumes/_form.html.erb :padline no
+      <%= form_for(@resume, :html => {:target => '_blank', :multipart => true}) do |f| %>
+      <% if @resume.errors.any? %>
+      <div id="error_explanation">
+        <h2><%= pluralize(@resume.errors.count, "error") %> prohibited this resume from being saved:</h2>
+
+        <ul>
+          <% @resume.errors.full_messages.each do |message| %>
+          <li><%= message %></li>
+          <% end %>
+        </ul>
+      </div>
+      <% end %>
+
+      <div class="field">
+        <%= f.label "Name" %>
+        <%= f.text_field %>
+      </div>
+      <br/>
+
+      <h2>EXPERIENCE:</h2>
+
+      <div class="form-group">
+        <%= f.fields_for :experiences, @resume.experiences do | f_experience | %>
+
+          <%= f_experience.label :title %>
+          <%= f_experience.text_field :title %>
+
+          <%= f_experience.label :begin_date %>
+          <%= f_experience.date_select :begin_date %>
+
+          <%= f_experience.label :end_date %>
+          <%= f_experience.date_select :end_date %>
+
+          <%= f_experience.label :achievements %>
+          <%= f_experience.text_area :achievements %>
+
+        <% end %>
+      </div>
+
+      <h2>SKILLS:</h2>
+
+      <div class="field">
+        <%= f.label :skills %>
+        <%= f.text_area %>
+      </div>
+
+      <h2>EDUCATION:</h2>
+
+      <div class="form-group">
+        <%= f.fields_for :programs, @resume.programs do | f_program | %>
+
+          <%= f_program.label :school %>
+          <%= f_program.text_field :school %>
+
+          <%= f_program.label :course %>
+          <%= f_program.text_field :course %>
+
+        <% end %>
+      </div>
+
+
+      <div class="actions">
+        <%= f.submit 'Make Resume', class: 'pure-button pure-button-primary' %>
+      </div>
+      <% end %>
+
+    #+end_src
+
+*** Experiences Views
+*** Programs Views    
+
+** Controllers   
+
+*** Resumes Controller
+
+    : rails g controller Resumes 
+
+    [[./app/controllers/resumes_controller.rb]]
+
+    #+NAME: resumes controller
+    #+begin_src ruby :tangle app/controllers/resumes_controller.rb :padline no
+      class ResumesController < ApplicationController
+        before_action :set_resume, only: [:show, :edit, :update, :destroy]
+        #before_action :logged_in_using_omniauth?, only: [:new, :edit, :update, :destroy]
+
+        def index
+          @resumes = Resume.all
+        end
+
+        def show
+          @resume = Resume.find(params[:id])
+          respond_to do |format|
+            format.html
+            format.pdf do
+              pdf = ResumePdf.new(@resume, view_context)
+              send_data pdf.render,
+                        filename: "resume_#{@resume.created_at.strftime("%d/%m/%Y")}.pdf",
+                        type: "application/pdf",
+                        disposition: "inline"
+            end
+          end
+        end
+
+        def new
+          @resume = Resume.new
+          @resume.experiences.new
+          @resume.programs.new
+        end
+
+        def edit
+        end
+
+        def create
+          @resume = Resume.new(resume_params)
+
+          respond_to do |format|
+            if @resume.save
+              format.pdf { render :pdf => "show" }
+              format.html { redirect_to @resume, notice: 'Resume was successfully created.' }
+              format.json { render :show, status: :created, location: @resume }
+            else
+              format.html { render :new }
+              format.json { render json: @resume.errors, status: :unprocessable_entity }
+            end
+          end
+        end
+
+        def update
+          respond_to do |format|
+            if @resume.update(resume_params)
+              format.html { redirect_to @resume, notice: 'Resume was successfully updated.' }
+              format.json { render :show, status: :ok, location: @resume }
+            else
+              format.html { render :edit }
+              format.json { render json: @resume.errors, status: :unprocessable_entity }
+            end
+          end
+        end
+
+        def destroy
+          @resume.destroy
+          respond_to do |format|
+            format.html { redirect_to resumes_url, notice: 'Resume was successfully destroyed.' }
+            format.json { head :no_content }
+          end
+        end
+
+        private
+        def set_resume
+          @resume = Resume.find(params[:id])
+        end
+
+        def resume_params
+          params.require(:resume).permit(:name, :experiences, :skills, :programs)
+        end
+
+      end
+    #+end_src
+
+*** Experiences Controller
+
+    : rails g controller Experiences
+
+    [[./app/controllers/experiences_controller.rb]]
+
+    #+NAME: experiences controller
+    #+begin_src ruby :tangle app/controllers/experiences_controller.rb :padline no
+      class ExperiencesController < ApplicationController
+        before_action :set_experience, only: [:show, :edit, :update, :destroy]
+        #before_action :logged_in_using_omniauth?, only: [:new, :edit, :update, :destroy]
+
+        def index
+          @experiences = Experience.all
+        end
+
+        def show
+          @experience = Experience.find(params[:id])
+          respond_to do |format|
+            format.html
+            format.pdf do
+              pdf = ExperiencePdf.new(@experience, view_context)
+              send_data pdf.render,
+                        filename: "experience_#{@experience.created_at.strftime("%d/%m/%Y")}.pdf",
+                        type: "application/pdf",
+                        disposition: "inline"
+            end
+          end
+        end
+
+        def new
+          @experience = Experience.new
+        end
+
+        def edit
+        end
+
+        def create
+          @experience = Experience.new(experience_params)
+
+          respond_to do |format|
+            if @experience.save
+              format.pdf { render :pdf => "show" }
+              format.html { redirect_to @experience, notice: 'Experience was successfully created.' }
+              format.json { render :show, status: :created, location: @experience }
+            else
+              format.html { render :new }
+              format.json { render json: @experience.errors, status: :unprocessable_entity }
+            end
+          end
+        end
+
+        def update
+          respond_to do |format|
+            if @experience.update(experience_params)
+              format.html { redirect_to @experience, notice: 'Experience was successfully updated.' }
+              format.json { render :show, status: :ok, location: @experience }
+            else
+              format.html { render :edit }
+              format.json { render json: @experience.errors, status: :unprocessable_entity }
+            end
+          end
+        end
+
+        def destroy
+          @experience.destroy
+          respond_to do |format|
+            format.html { redirect_to experiences_url, notice: 'Experience was successfully destroyed.' }
+            format.json { head :no_content }
+          end
+        end
+
+        private
+        def set_experience
+          @experience = Experience.find(params[:id])
+        end
+
+        def experience_params
+          params.require(:experience).permit(:title, :begin_date, :end_date, :achievements)
+        end
+
+      end
+    #+end_src
+
+*** Programs Controller
+
+    : rails g controller Programs
+
+    [[./app/controllers/programs_controller.rb]]
+
+    #+NAME: programs controller
+    #+begin_src ruby :tangle app/controllers/programs_controller.rb :padline no
+      class ProgramsController < ApplicationController
+        before_action :set_program, only: [:show, :edit, :update, :destroy]
+        #before_action :logged_in_using_omniauth?, only: [:new, :edit, :update, :destroy]
+
+        def index
+          @programs = Program.all
+        end
+
+        def show
+          @program = Program.find(params[:id])
+          respond_to do |format|
+            format.html
+            format.pdf do
+              pdf = ProgramPdf.new(@program, view_context)
+              send_data pdf.render,
+                        filename: "program_#{@program.created_at.strftime("%d/%m/%Y")}.pdf",
+                        type: "application/pdf",
+                        disposition: "inline"
+            end
+          end
+        end
+
+        def new
+          @program = Program.new
+        end
+
+        def edit
+        end
+
+        def create
+          @program = Program.new(program_params)
+
+          respond_to do |format|
+            if @program.save
+              format.pdf { render :pdf => "show" }
+              format.html { redirect_to @program, notice: 'Program was successfully created.' }
+              format.json { render :show, status: :created, location: @program }
+            else
+              format.html { render :new }
+              format.json { render json: @program.errors, status: :unprocessable_entity }
+            end
+          end
+        end
+
+        def update
+          respond_to do |format|
+            if @program.update(program_params)
+              format.html { redirect_to @program, notice: 'Program was successfully updated.' }
+              format.json { render :show, status: :ok, location: @program }
+            else
+              format.html { render :edit }
+              format.json { render json: @program.errors, status: :unprocessable_entity }
+            end
+          end
+        end
+
+        def destroy
+          @program.destroy
+          respond_to do |format|
+            format.html { redirect_to programs_url, notice: 'Program was successfully destroyed.' }
+            format.json { head :no_content }
+          end
+        end
+
+        private
+        def set_program
+          @program = Program.find(params[:id])
+        end
+
+        def program_params
+          params.require(:program).permit(:school, :course)
+        end
+
+      end
+    #+end_src
+
+
+** Classes
+
+*** ResumePDF
+
+    [[./app/pdfs/resume_pdf.rb]]
+
+    #+NAME: ResumePDF
+    #+begin_src ruby :tangle app/pdfs/resume_pdf.rb
+      class ResumePdf < Prawn::Document
+        def initialize(resume, view)
+          super()
+          @resume = resume
+          
+          @view = view
+        end
+      end
+    #+end_src
+    
+ 
+
+   
+  
+
+  
+
+
+
+
